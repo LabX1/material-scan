@@ -1,34 +1,35 @@
- if (config.Includes.esp.chams.select == 0) 
-                        continue;
+struct dynamic_array
+{
+	std::uint64_t base;
+	std::uint64_t mem_id;
+	std::uint64_t sz;
+	std::uint64_t cap;
+};
 
-                    const auto player_model = entity->playerModel();
-                    if (!player_model)
-                        continue;
+// Loop through player list to apply chams to players.
+for (auto entityLoop : entities)
+{
+	auto skinnedMultiMesh = threads::Read<uintptr_t>(playerModel + offsets::playermodel::multi_mesh); // _multiMesh
+	auto SkinnedRenderersList = threads::Read<uintptr_t>(skinnedMultiMesh + 0x78); // List<Renderer> <Renderers>k__BackingField;
+	auto SkinnedList = threads::Read<uintptr_t>(SkinnedRenderersList + 0x10);
+	int materialsCount = threads::Read<int>(SkinnedRenderersList + 0x18);
 
-                    const auto multi_mesh = player_model->_multiMesh();
-                    if (!multi_mesh)
-                        continue;
+	for (std::uint32_t idx{ 0 }; idx < materialsCount; idx++) {
+		const auto renderEntry = threads::Read<uintptr_t>(SkinnedList + 0x20 + (idx * 0x8));
+		if (!renderEntry)
+			continue;
 
-                    const auto renderers = multi_mesh->Renderersk__BackingField();
+		const auto untity_object = threads::Read<uintptr_t>(renderEntry + 0x10);
+		if (!untity_object)
+			continue;
 
-                    if (!renderers)
-                        continue;
+		const auto mat_list = threads::Read<dynamic_array>(untity_object + 0x148);
+		if (mat_list.sz < 1 || mat_list.sz > 5)
+			continue;
 
-                    for (std::uint32_t idx{ 0 }; idx < renderers->size(); idx++)
-                    {
-                        const auto renderer = renderers->get(idx);
-                        if (!renderer)
-                            continue;
+		for (std::uint32_t idx{ 0 }; idx < mat_list.sz; idx++) {
+			threads::Write<unsigned int>(mat_list.base + (idx * 0x4), globals::chamMaterial);
 
-                        const auto untity_object = driver.read<std::uintptr_t>(renderer + 0x10);
-                        if (!untity_object)
-                            continue;
-
-                        const auto material_list = driver.read<systems::dynamic_array>(untity_object + 0x148);
-
-                        if (material_list.sz < 1 || material_list.sz > 5)
-                            continue;
-
-                        for (std::uint32_t idx{ 0 }; idx < material_list.sz; idx++)
-                            driver.write<unsigned int>(material_list.base + (idx * 0x4), chams);
-                    }
+		}
+	}
+}
